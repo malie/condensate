@@ -2,6 +2,8 @@
 let assert = require('assert')
 let immutable = require('immutable')
 
+let dimacs = require('./dimacs')
+
 const contradiction = 'contradiction'
 const satisfied = 'satisfied'
 
@@ -142,10 +144,21 @@ class sat {
 // http://www.cs.utexas.edu/users/moore/acl2/seminar/2008.12.10-swords/sat.pdf
 // http://jsat.ewi.tudelft.nl/addendum/thesis_as_sent.pdf
 
+function verboseTest(cnf) {
+  let s = new sat(cnf)
+  let res = s.dpll();
+  console.log('result: ' + res)
+  console.log(s.stats)}
 
-let cnf = [[1,2,3], [-1,-2], [-2,-3], [3,4,5], [-4,5], [4, -5],
-	   [1,5,6], [-1,-5], [-5, -6], [2,-6], [-2,6]]
-let s = new sat(cnf)
-console.log(s)
-s.dpll();
-console.log(s.stats)
+function test1() {
+  let cnf = [[1,2,3], [-1,-2], [-2,-3], [3,4,5], [-4,5], [4, -5],
+	     [1,5,6], [-1,-5], [-5, -6], [2,-6], [-2,6]]
+  verboseTest(cnf)}
+
+function test2() {
+  dimacs.readDimacs(
+    process.argv[2],
+    function (cnf) {
+      verboseTest(cnf)})}
+
+test1();
