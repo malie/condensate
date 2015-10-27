@@ -10,7 +10,7 @@ function readDimacs(filename, cont) {
       cont(content
 	   .split('\n')
 	   .filter(line => line.trim().length >=1)
-	   .map(line => line.split(' '))
+	   .map(line => line.split(/ +/))
 	   .filter(line => (line[0] != 'c'
 			    && line[0] != 'p'))
 	   .map(line =>
