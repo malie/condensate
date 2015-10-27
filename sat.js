@@ -251,8 +251,21 @@ function test2() {
   for (var clause of cnf)
     console.log(clause)
   verboseTest(cnf, 50)}
-  
+
 function test3() {
+  let numVars = 100;
+  let numClauses3 = Math.floor(2 * numVars);
+  let numClauses2 = Math.floor(0.75 * numVars);
+  let numClauses1 = 0; // Math.floor(0.01 * numVars);
+  let cnf3 = randomCNF.randomCNF(3, numVars, numClauses3);
+  let cnf2 = randomCNF.randomCNF(2, numVars, numClauses2);
+  let cnf1 = randomCNF.randomCNF(1, numVars, numClauses1);
+  let cnf = [].concat(cnf1, cnf2, cnf3);
+  for (var clause of cnf)
+    console.log(clause)
+  verboseTest(cnf, 50)}
+
+function test4() {
   dimacs.readDimacs(
     process.argv[2],
     function (cnf) {
@@ -261,5 +274,5 @@ function test3() {
       verboseTest(cnf)})}
 
 // test1();
-test2();
-// test3();
+// test2();
+test3();
