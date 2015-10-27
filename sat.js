@@ -35,6 +35,8 @@ function compareLit(a, b) {
 function compareInt(a, b) {
   return (+a) - (+b)}
 
+const verbose = false;
+
 class sat {
   constructor(dimacs) {
     this.initializeStats();
@@ -52,27 +54,28 @@ class sat {
 		   numAgainWatchTwo: 0}}
   
   simplify() {
+    verbose && console.log('simplify');
     this.dimacs = (this.initialDimacs
 		   .filter(clause => clause.length >= 2))
     let initialAssignments = (this.initialDimacs
 			      .filter(clause => clause.length === 1)
 			      .map(clause => clause[0]))
-    console.log('initial assignments')
-    console.log(initialAssignments)
+    if (verbose) {
+      console.log('initial assignments')
+      console.log(initialAssignments)}
     
     // TODO: uniquify literals in clauses, also drop [-3,3,...] clauses
     // TODO: drop variables with only positive mentions (also negative)
     // TODO: run a few resolution steps: find variables that appear
     //       not that often and have small numPos*numNeg
 
-    console.log('building watchTwo');
     this.watchTwo = this.buildWatchTwo()
     
-    console.log('simplification');
+    verbose && console.log('simplification');
     let as1 = this.makeAssignments(0,
 				   new immutable.Set(),
 				   initialAssignments);
-    console.log('simplification done: ' + as1);
+    verbose && console.log('simplification done: ' + as1);
     if (as1 === contradiction)
       return contradiction;
     this.assignments = as1}
@@ -90,14 +93,16 @@ class sat {
     return this.dpllRec(0, this.assignments)}
   
   dpllRec(depth, assignments) {
-    console.log('');
+    verbose && console.log('');
     let someNextLits = this.decisionVariableHeuristic(assignments)
-    console.log(indent(depth), 'someNextLits', someNextLits)
+    verbose && console.log(indent(depth), 'someNextLits', someNextLits)
     if (someNextLits.length == 0) {
       // found a solution
       let sa = Array.from(assignments);
       sa.sort(compareLit);
-      console.log(indent(depth), '*** ' + sa)
+      verbose && console.log(indent(depth), '*** ' + sa)
+      console.log(indent(depth), '*** ' +
+		  sa.filter(l => l >= 1))
       if (this.searchAllAssignments)
 	return contradiction
       else
@@ -127,8 +132,9 @@ class sat {
     var seenLits = new Set(lits);
     while (lits.length > 0) {
       let lit = lits.shift();
-      console.log(indent(depth),
-		  'propagating ' + lit + '        ++ ' + assignments)
+      verbose && console.log(indent(depth),
+			     'propagating ' + lit
+			     + '        ++ ' + assignments)
       assert(!assignments.has(lit))
       assert(!assignments.has(-lit))
       assignments = assignments.add(lit)
@@ -140,23 +146,27 @@ class sat {
       for (var cid of cids) {
 	let clause = this.dimacs[cid];
 	let two = this.upToTwoUnsatisfiedLits(assignments, clause);
-	console.log(indent(depth), 'two from', this.dimacs[cid], two)
+	verbose &&
+	  console.log(indent(depth), 'two from', this.dimacs[cid], two)
 	if (two === satisfied) {
 	  continue}
 	else if (two.length == 0) {
-	  console.log(indent(depth),
-		      'contradiction ' + assignments + '\n')
+	  verbose && 
+	    console.log(indent(depth),
+			'contradiction ' + assignments + '\n')
 	  this.stats.numContradictions += 1
 	  return contradiction}
 	else if (two.length == 1) {
 	  let plit = two[0];
 	  if (seenLits.has(plit))
 	    continue;
-	  console.log(indent(depth), 'will propagate ' + plit)
+	  verbose &&
+	    console.log(indent(depth), 'will propagate ' + plit)
 	  this.stats.numPropagations += 1
 	  if (seenLits.has(-plit)) {
-	    console.log(indent(depth),
-			'contradiction with earlier plit\n')
+	    verbose &&
+	      console.log(indent(depth),
+			  'contradiction with earlier plit\n')
 	    return contradiction}
 	  lits.push(plit)
 	  seenLits.add(plit)}
@@ -230,7 +240,7 @@ function test1() {
   verboseTest(cnf)}
 
 function test2() {
-  let numVars = 40;
+  let numVars = 50;
   let numClauses3 = Math.floor(4.2 * numVars);
   let numClauses2 = 0; // Math.floor(0.5 * numVars);
   let numClauses1 = 0; // Math.floor(0.01 * numVars);
@@ -240,14 +250,16 @@ function test2() {
   let cnf = [].concat(cnf1, cnf2, cnf3);
   for (var clause of cnf)
     console.log(clause)
-  verboseTest(cnf, 7)}
+  verboseTest(cnf, 50)}
   
 function test3() {
   dimacs.readDimacs(
     process.argv[2],
     function (cnf) {
+      for (var clause of cnf)
+	console.log(clause)
       verboseTest(cnf)})}
 
 // test1();
-// test2();
-test3();
+test2();
+// test3();
