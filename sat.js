@@ -8,12 +8,12 @@ const contradiction = 'contradiction'
 const satisfied = 'satisfied'
 
 function mapOfSetsAdd(map, key, val) {
-  let list;
+  let s;
   if (!map.has(key))
-    map.set(key, list = new Set())
+    map.set(key, s = new Set())
   else
-    list = map.get(key)
-  list.add(val)}
+    s = map.get(key)
+  s.add(val)}
 
 function chooseRandomArrayElement(ary) {
   assert(ary.length > 0)
@@ -22,12 +22,20 @@ function chooseRandomArrayElement(ary) {
 function arrayContains(ary, el) {
   return ary.indexOf(el) >= 0}
 
+function indent(n) {
+  var res = [];
+  for (var i = 0; i < n; i += 1) {
+    res.push(' ')}
+  return res.join('')}
+
 class sat {
   constructor(dimacs) {
     this.dimacs = dimacs
     // TODO: simplify from unit clauses
     // TODO: uniquify literals in clauses, also drop [-3,3,...] clauses
     // TODO: drop variables with only positive mentions (also negative)
+    // TODO: run a few resolution steps: find variables that appear
+    //       not that often and have small numPos*numNeg
     this.assignments = new immutable.Set()
     this.watchTwo = this.buildWatchTwo()
     this.searchAllAssignments = false
@@ -49,33 +57,34 @@ class sat {
     return res}
   
   dpll() {
-    this.dpllRec(this.assignments)}
+    this.dpllRec(0, this.assignments)}
   
-  dpllRec(assignments) {
+  dpllRec(depth, assignments) {
     console.log('');
     let someNextLits = this.decisionVariableHeuristic(assignments)
     if (someNextLits.length == 0) {
       // found a solution
-      console.log('*** ' + assignments)
+      console.log(indent(depth), '*** ' + assignments)
       if (this.searchAllAssignments)
 	return contradiction
       else
 	return satisfied
     }
     let nextLit = chooseRandomArrayElement(someNextLits)
-    console.log('nextLit', nextLit)
-    let a = this.dpllWithAssignments(assignments, nextLit);
+    console.log(indent(depth), 'nextLit', nextLit)
+    let a = this.dpllWithAssignments(depth, assignments, nextLit);
     if (a !== contradiction)
       return a;
-    return this.dpllWithAssignments(assignments, -nextLit)}
+    return this.dpllWithAssignments(depth, assignments, -nextLit)}
 
-  dpllWithAssignments(assignments0, lit0) {
+  dpllWithAssignments(depth,assignments0, lit0) {
     var lits = [lit0];
     var seenLits = new Set(lits);
     var assignments = assignments0;
     while (lits.length > 0) {
       let lit = lits.shift();
-      console.log('propagating ' + lit + '        ++ ' + assignments)
+      console.log(indent(depth),
+		  'propagating ' + lit + '        ++ ' + assignments)
       assert(!assignments.has(lit))
       assert(!assignments.has(-lit))
       assignments = assignments.add(lit)
@@ -87,19 +96,21 @@ class sat {
       for (var cid of cids) {
 	let clause = this.dimacs[cid];
 	let two = this.upToTwoUnsatisfiedLits(assignments, clause);
-	console.log('two from', this.dimacs[cid], two)
+	console.log(indent(depth), 'two from', this.dimacs[cid], two)
 	if (two === satisfied) {
 	  continue}
 	else if (two.length == 0) {
-	  console.log('contradiction ' + assignments + '\n')
+	  console.log(indent(depth),
+		      'contradiction ' + assignments + '\n')
 	  this.stats.numContradictions += 1
 	  return contradiction}
 	else if (two.length == 1) {
-	  console.log('will propagate ' + two)
+	  console.log(indent(depth), 'will propagate ' + two)
 	  this.stats.numPropagations += 1
 	  let plit = two[0];
 	  if (seenLits.has(-plit)) {
-	    console.log('contradiction with earlier plit\n')
+	    console.log(indent(depth),
+			'contradiction with earlier plit\n')
 	    return contradiction}
 	  lits.push(plit)
 	  seenLits.add(plit)}
@@ -107,7 +118,7 @@ class sat {
 	  this.stats.numAgainWatchTwo += 1
 	  for (var v of two)
 	    mapOfSetsAdd(this.watchTwo, v, cid)}}}
-    return this.dpllRec(assignments)}
+    return this.dpllRec(depth+1, assignments)}
 
   decisionVariableHeuristic(assignments) {
     // returns a list of lits to try next
@@ -143,6 +154,7 @@ class sat {
 
 // http://www.cs.utexas.edu/users/moore/acl2/seminar/2008.12.10-swords/sat.pdf
 // http://jsat.ewi.tudelft.nl/addendum/thesis_as_sent.pdf
+// http://www.cs.ubc.ca/~hoos/SATLIB/benchm.html
 
 function verboseTest(cnf) {
   let s = new sat(cnf)
