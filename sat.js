@@ -7,6 +7,8 @@ let randomCNF = require('./randomCNF')
 
 const contradiction = 'contradiction'
 const satisfied = 'satisfied'
+const assumption = 'assumption'
+const given = 'given'
 
 function mapOfSetsAdd(map, key, val) {
   let s;
@@ -35,7 +37,7 @@ function compareLit(a, b) {
 function compareInt(a, b) {
   return (+a) - (+b)}
 
-const verbose = false;
+const verbose = true;
 
 class sat {
   constructor(dimacs) {
@@ -73,8 +75,9 @@ class sat {
     
     verbose && console.log('simplification');
     let as1 = this.makeAssignments(0,
-				   new immutable.Set(),
-				   initialAssignments);
+				   new immutable.Map(),
+				   initialAssignments,
+				   given);
     verbose && console.log('simplification done: ' + as1);
     if (as1 === contradiction)
       return contradiction;
@@ -98,7 +101,7 @@ class sat {
     verbose && console.log(indent(depth), 'someNextLits', someNextLits)
     if (someNextLits.length == 0) {
       // found a solution
-      let sa = Array.from(assignments);
+      let sa = Array.from(assignments.keySeq());
       sa.sort(compareLit);
       verbose && console.log(indent(depth), '*** ' + sa)
       console.log(indent(depth), '*** ' +
@@ -111,33 +114,42 @@ class sat {
     let nextLit = chooseRandomArrayElement(someNextLits)
     console.log(indent(depth), 'nextLit', nextLit)
     
-    let as1 = this.makeAssignment(depth, assignments, nextLit);
+    let as1 = this.makeAssignment(depth, assignments,
+				  nextLit, assumption);
     if (as1 !== contradiction) {
       let a = this.dpllRec(depth+1, as1);
       if (a !== contradiction)
 	return a}
     
     this.stats.numAssignOther += 1;
-    let as2 = this.makeAssignment(depth, assignments, -nextLit)
+    let as2 = this.makeAssignment(depth, assignments,
+				  -nextLit, assumption)
     if (as2 === contradiction)
       return contradiction;
     return this.dpllRec(depth+1, as2)}
     
 
-  makeAssignment(depth, assignments, lit0) {
-    return this.makeAssignments(depth, assignments, [lit0])}
+  makeAssignment(depth, assignments, lit0, reason) {
+    return this.makeAssignments(depth, assignments, [lit0], reason)}
   
-  makeAssignments(depth, assignments, lits0) {
-    var lits = lits0;
-    var seenLits = new Set(lits);
+  makeAssignments(depth, assignments, lits0, reason0) {
+    assert(reason0)
+    var lits = [];
+    var seenLits = new Map();
+    for (var lit0 of lits0) {
+      lits.push([lit0, reason0])
+      seenLits.set(lit0, reason0)}
+    
     while (lits.length > 0) {
-      let lit = lits.shift();
+      let lr = lits.shift();
+      let lit = lr[0]
+      let reason = lr[1]
       verbose && console.log(indent(depth),
 			     'propagating ' + lit
-			     + '        ++ ' + assignments)
+			     + '        ++ ' + assignments.keySeq())
       assert(!assignments.has(lit))
       assert(!assignments.has(-lit))
-      assignments = assignments.add(lit)
+      assignments = assignments.set(lit, reason)
 
       let cids = this.watchTwo.get(-lit);
       if (!cids)
@@ -151,6 +163,7 @@ class sat {
 	if (two === satisfied) {
 	  continue}
 	else if (two.length == 0) {
+	  // TODO: no such case??
 	  verbose && 
 	    console.log(indent(depth),
 			'contradiction ' + assignments + '\n')
@@ -167,15 +180,28 @@ class sat {
 	    verbose &&
 	      console.log(indent(depth),
 			  'contradiction with earlier plit\n')
+	    this.analyzeConflict(assignments,
+				 clause,
+				 seenLits.get(-plit))
 	    return contradiction}
-	  lits.push(plit)
-	  seenLits.add(plit)}
+	  lits.push([plit, clause])
+	  seenLits.set(plit, clause)}
 	else if (two.length == 2) {
 	  this.stats.numAgainWatchTwo += 1
 	  for (var v of two)
 	    mapOfSetsAdd(this.watchTwo, v, cid)}}}
     return assignments}
 
+
+  analyzeConflict(assignments,
+		  laterClause,
+		  earlierClause) {
+    console.log('analyzeConflict')
+    console.log('laterClause', laterClause)
+    console.log('earlierClause', earlierClause)
+  }
+
+  
   decisionVariableHeuristic(assignments) {
     // returns a list of lits to try next
     this.stats.numDecisionVariableHeuristic += 1;
@@ -236,7 +262,8 @@ function verboseTest(cnf, numTries) {
 function test1() {
   let cnf = [[1,2,3], [-1,-2], [-2,-3], [3,4,5], [-4,5], [4, -5],
 	     [1,5,6], [-1,-5], [-5, -6], [2,-6], [-2,6],
-	     [-2]]
+	     // [-2]
+	    ]
   verboseTest(cnf)}
 
 function test2() {
@@ -253,7 +280,7 @@ function test2() {
   verboseTest(cnf, 50)}
 
 function test3() {
-  let numVars = 100;
+  let numVars = 10;
   let numClauses3 = Math.floor(2 * numVars);
   let numClauses2 = Math.floor(0.75 * numVars);
   let numClauses1 = 0; // Math.floor(0.01 * numVars);

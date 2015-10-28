@@ -5,6 +5,9 @@ function randomCNF(clauseSize, numVars, numClauses) {
     res.push(randomClause(clauseSize, numVars))
   return res}
 
+function compareLit(a, b) {
+  return Math.abs(a) - Math.abs(b)}
+
 function randomClause(size, numVars) {
   var res = [];
   var seen = new Set();
@@ -15,6 +18,7 @@ function randomClause(size, numVars) {
       continue;
     seen.add(v)
     res.push(lit)}
+  res.sort(compareLit)
   return res}
 
 function randomLiteral(numVars) {
