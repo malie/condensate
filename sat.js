@@ -298,6 +298,7 @@ function verboseTest(cnf, numTries, allowLearnClauses) {
     console.log('result, contradiction in simplification')
     return}
   for (var t = 0; t < numTries; t++) {
+    console.log('num clauses', s.dimacs.length)
     var start = +new Date();
     res = s.dpll();
     var end = +new Date();
@@ -330,7 +331,7 @@ function test2() {
   verboseTest(cnf, 50)}
 
 function test3() {
-  let numVars = 60;
+  let numVars = 70;
   let numClauses3 = Math.floor(4.2 * numVars);
   let numClauses2 = Math.floor(0 * numVars);
   let numClauses1 = 0; // Math.floor(0.01 * numVars);

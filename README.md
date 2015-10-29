@@ -12,3 +12,5 @@ todo:
 * CDCL resolvent can be one single literal, simplify again.
      (that's a very useful case!)
 * decision variable heuristic
+* measure usefulness of the learn clauses, drop the least useful
+
