@@ -13,9 +13,20 @@ const NOT  = 'not';
 function isOp(x) {
   return (typeof x) == 'object' && !!x.op}
 
+function isVar(x) {
+  return !isOp(x)}
+
+function isNotVar(x) {
+  return (isOp(x)
+	  && x.op === NOT
+	  && isVar(x.args[0]))}
+
 function varOrNegVar(x) {
-  return (!isOp(x)
-	  || (isOp(x) && x.op === NOT))}
+  return (isVar(x)
+	  || isNotVar(x))}
+
+function isOr(x) {
+  return isOp(x) && x.op === OR}
 
 function and() {
   return {op:AND, args: Array.prototype.slice.call(arguments)}}
@@ -58,53 +69,124 @@ function tseitin(x) {
 
 class tseitinEncoder {
   constructor() {
-    this.clauses = []}
+    this.clauses = []
+    this.gensymId = 0}
+  
   encode(x) {
-    this.tseitin_outer(x)
+    this.tseitin_ands(x)
     return this}
 
   // enter AND nodes
-  tseitin_outer(x) {
+  tseitin_ands(x) {
     if (isOp(x) && x.op === AND) {
       for (var c of x.args)
-	this.tseitin_outer(c)}
+	this.tseitin_ands(c)}
     else {
-      let v = this.tseitin_inner(x);
-      if (v)
-	this.clauses.push([v])}}
+      let clause = this.tseitin_ors(x);
+      if (clause)
+	this.addClause(clause)}}
 
-  // see if a AND child consists only of OR's else encode it
-  tseitin_inner(x) {
-    let parts = this.deep_or(x);
-    if (parts !== null) {
-      this.clauses.push(parts)
-      return null}
+  addClause(clause) {
+    this.clauses.push(clause)}
+
+  tseitin_ors(x) {
+    if (varOrNegVar(x))
+      return [x]
+    var vs = this.deep_or(x);
+    return this.tseitin_args(vs)}
+
+  tseitin_args(args) {
+    return args.map(arg => this.tseitin_arg(arg))}
+
+  tseitin_arg(x) {
+    if (varOrNegVar(x))
+      return x;
     else {
-      return this.connective(x)}}
+      assert(isOp(x))
+      if (x.op === OR)
+	return this.tseitin_or(this.tseitin_args(x.args))
+      else if (x.op === AND)
+	return this.tseitin_and(this.tseitin_args(x.args))
+      else if (x.op === XOR)
+	return this.tseitin_xor(this.tseitin_args(x.args))
+      else if (x.op === EQ)
+	return this.tseitin_eq(this.tseitin_args(x.args))
+      else if (x.op === NOR)
+	return this.tseitin_nor(this.tseitin_args(x.args))
+      else if (x.op === NAND)
+	return this.tseitin_nand(this.tseitin_args(x.args))}}
 
-  // OR of optionally negated vars
+  gensym(prefix) {
+    return '' + (prefix||'') + '*' + (this.gensymId+=1)}
+
+  
+  // x => (a|b|c), -x => -a&-b&-c
+  // -x|a|b|c, x|-a, x|-b, x|-c
+  // ("," is a low prio AND)
+  tseitin_or(bs) {
+    var x = this.gensym('or');
+    this.addClause([not(x)].concat(bs))
+    for (var b of bs)
+      this.addClause([x, not(b)])
+    return x}
+
+  // x => (a&b&c), -x => -a|-b|-c
+  // -x|(a&b&c), x|-a|-b|-c
+  // -x|a, -x|b, -x|c, x|-a|-b|-c
+  tseitin_and(bs) {
+    var x = this.gensym('and');
+    this.addClause([x].concat(bs.map(not)))
+    for (var b of bs)
+      this.addClause([not(x), b])
+    return x}
+
+  
+  // OR of OR's
   deep_or(x0) {
     var res = []
     var stack = [x0];
     while (stack.length > 0) {
       var x = stack.pop();
-      if (varOrNegVar(x))
+      if (!isOr(x))
 	res.push(x)
-      else if (isOp(x) && x.op === OR) {
-	for (var t of x.args) {
-	  stack.push(t)}}
-      else {
-	return null}}
+      else
+	for (var t of x.args)
+	  stack.push(t)}
     res.reverse()
     return res}
 
 }
 
+function printClauses(clauses) {
+  for (var clause of clauses) {
+    printClause(clause)}}
 
+function printClause(clause) {
+  var text = []
+  for (var lit of clause) {
+    if (isNotVar(lit)) {
+      text.push('-' + lit.args[0])}
+    else if (isVar(lit)) {
+      text.push(lit)}
+    else {
+      assert(false, util.inspect(lit, null, 4))}}
+  console.log(text.join(' '))}
+
+function tseitin_test(x, expected) {
+  let res = tseitin(x);
+  try {
+    assert.deepEqual(res, expected)
+  } catch (e) {
+    console.log('\nresult is')
+    console.log(util.inspect(res, null, 4))
+    console.log('\nresult is')
+    printClauses(res)
+    throw e;
+  }}
 
 function tseitin_tests() {
-  assert.deepEqual(
-    tseitin(and(or('a','b'), or('b','c', or('d', 'e')))),
+  tseitin_test(
+    and(or('a','b'), or('b','c', or('d', 'e'))),
     [['a', 'b' ],
      ['b', 'c', 'd', 'e']])
 
@@ -113,12 +195,17 @@ function tseitin_tests() {
 				     or('d', not('e'))))),
     [[not('a'), 'b' ],
      ['b', not('c'), 'd', not('e')]])
-  
+
   assert.deepEqual(
     tseitin(and(not('a'),'b')),
     [[not('a')],
-     ['b' ]])
+     ['b']])
 
+  printClauses(
+    tseitin(and(or(and('a','b'), and('c', 'd')), 'e')))
+
+  printClauses(
+    tseitin(or(and('a','b'), and('c', 'd'))))
 
   console.log('ok')
 }
