@@ -155,7 +155,7 @@ class tseitinEncoder {
   // -x|-a|-b|-c, x|a, x|b, x|c, 
   tseitin_nand(bs) {
     var x = this.gensym('NAND');
-    this.addClause([x].concat(bs))
+    this.addClause([not(x)].concat(bs.map(not)))
     for (var b of bs)
       this.addClause([x, b])
     return x}
@@ -164,10 +164,10 @@ class tseitinEncoder {
   // x => (a|-b)&(-a|b), -x => (a|b)&(-a|-b)
   // -x|a|-b, -x|-a|b, x|a|b, x|-a|-b
   tseitin_eq(bs) {
-    assert(bs.args.length == 2)
+    assert(bs.length == 2)
     var x = this.gensym('EQ');
-    var a = this.args[0];
-    var b = this.args[1];
+    var a = bs[0];
+    var b = bs[1];
     this.addClause([not(x), a, not(b)])
     this.addClause([not(x), not(a), b])
     this.addClause([x, a, b])
@@ -177,10 +177,10 @@ class tseitinEncoder {
   // x => (a|b)&(-a|-b), -x => (a|-b)&(-a|b)
   // -x|a|b, -x|-a|-b, x|a|-b, x|-a|b
   tseitin_xor(bs) {
-    assert(bs.args.length == 2)
-    var x = this.gensym('EQ');
-    var a = this.args[0];
-    var b = this.args[1];
+    assert(bs.length == 2)
+    var x = this.gensym('XOR');
+    var a = bs[0];
+    var b = bs[1];
     this.addClause([not(x), a, b])
     this.addClause([not(x), not(a), not(b)])
     this.addClause([x, a, not(b)])
@@ -218,50 +218,52 @@ function printClause(clause) {
       assert(false, util.inspect(lit, null, 4))}}
   console.log(text.join(' '))}
 
-function tseitin_test(x, expected) {
-  let res = tseitin(x);
-  try {
-    assert.deepEqual(res, expected)
-  } catch (e) {
-    console.log('\nresult is')
-    console.log(util.inspect(res, null, 4))
-    console.log('\nresult is')
-    printClauses(res)
-    throw e;
-  }}
 
-function tseitin_tests() {
-  tseitin_test(
-    and(or('a','b'), or('b','c', or('d', 'e'))),
-    [['a', 'b' ],
-     ['b', 'c', 'd', 'e']])
+// expects a CNF and turns it into a DIMACS
+function clausesToDimacs(clauses) {
+  var dimacs = [];
+  var nameToIndex = new Map();
+  var indexToName = new Map();
+  var next = 1;
+  function name(nm) {
+    if (nameToIndex.has(nm))
+      return nameToIndex.get(nm)
+    var res = next
+    next += 1
+    nameToIndex.set(nm, res)
+    indexToName.set(res, nm)
+    return res}
 
-  tseitin_test(
-    and(or(not('a'),'b'), or('b',not('c'),
-			     or('d', not('e')))),
-    [[not('a'), 'b' ],
-     ['b', not('c'), 'd', not('e')]])
-
-  tseitin_test(
-    and(not('a'),'b'),
-    [[not('a')],
-     ['b']])
-
-  tseitin_test(
-    or(and('a','b'), and('c', 'd')),
-    [['AND1', not('a'), not('b')],
-     [not('AND1'), 'a'],
-     [not('AND1'), 'b'],
-     ['AND2', not('c'), not('d')],
-     [not('AND2'), 'c'],
-     [not('AND2'), 'd'],
-     ['AND1', 'AND2']])
-
-  console.log('ok')
-}
+  for (var clause of clauses) {
+    var cl = [];
+    for (var lit of clause) {
+      let i;
+      if (isVar(lit))
+	i = name(lit)
+      else {
+	assert(isNotVar(lit))
+	i = -name(lit.args[0])}
+      cl.push(i)}
+    dimacs.push(cl)}
+  return {dimacs: dimacs,
+	  nameToIndex: nameToIndex,
+	  indexToName: indexToName}}
 
 
-//   console.log(util.inspect(input, null, 5))
-// let ts = tseitin(input)
-// console.log(util.inspect(ts, null, 5))
-tseitin_tests()
+module.exports =
+  { tseitin: tseitin,
+    and: and,
+    or: or,
+    xor: xor,
+    eq: eq,
+    nand: nand,
+    nor: nor,
+    not: not,
+    printClauses: printClauses,
+    isOp: isOp,
+    isVar: isVar,
+    isNotVar: isNotVar,
+    varOrNegVar: varOrNegVar,
+    AND, OR, NAND, NOR, EQ, XOR, NOT,
+    clausesToDimacs
+  }

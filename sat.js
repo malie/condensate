@@ -3,7 +3,6 @@ let assert = require('assert')
 let immutable = require('immutable')
 
 let dimacs = require('./dimacs')
-let randomCNF = require('./randomCNF')
 
 const contradiction = 'contradiction'
 const satisfied = 'satisfied'
@@ -37,6 +36,9 @@ function compareLit(a, b) {
 function compareInt(a, b) {
   return (+a) - (+b)}
 
+function uniq(ary) {
+  return Array.from(new Set(ary))}
+
 const verbose = false;
 
 class sat {
@@ -44,7 +46,9 @@ class sat {
     this.initializeStats();
     this.initialDimacs = dimacs
     this.searchAllAssignments = false
-    this.allowLearnClauses = true}
+    this.maxNumberAssignments = null;
+    this.allowLearnClauses = true
+    this.solutions = []}
 
   initializeStats() {
     this.stats = { numClauseSatisfiedChecks: 0,
@@ -61,15 +65,19 @@ class sat {
     verbose && console.log('simplify');
     this.dimacs = (this.initialDimacs
 		   .filter(clause => clause.length >= 2))
-    let initialAssignments = (this.initialDimacs
-			      .filter(clause => clause.length === 1)
-			      .map(clause => clause[0]))
+    let initialAssignments =
+	this.processInitialAssignments(
+	  this.initialDimacs
+	    .filter(clause => clause.length === 1)
+	    .map(clause => clause[0]));
+    if (initialAssignments === contradiction)
+      return contradiction;
+			      
     if (verbose) {
       console.log('initial assignments')
       console.log(initialAssignments)}
     
-    // TODO: uniquify literals in clauses, also drop [-3,3,...] clauses
-    // TODO: drop variables with only positive mentions (also negative)
+    // TODO: drop variables with only positive uses (also negative)
     // TODO: run a few resolution steps: find variables that appear
     //       not that often and have small numPos*numNeg
 
@@ -84,6 +92,17 @@ class sat {
     if (as1 === contradiction)
       return contradiction;
     this.assignments = as1}
+
+  processInitialAssignments(assignments) {
+    let res = new Set();
+    for (var a of assignments) {
+      if (res.has(a))
+	continue;
+      else if (res.has(-a))
+	return contradiction;
+      else
+	res.add(a)}
+    return Array.from(res)}
   
   buildWatchTwo() {
     let res = new Map()
@@ -106,10 +125,14 @@ class sat {
       let sa = Array.from(assignments.keySeq());
       sa.sort(compareLit);
       verbose && console.log(indent(depth), '*** ' + sa)
-      console.log(indent(depth), '*** ' +
-		  sa.filter(l => l >= 1))
-      if (this.searchAllAssignments)
-	return contradiction
+      verbose && console.log(indent(depth), '*** ' +
+			     sa.filter(l => l >= 1))
+
+      this.recordAssignment(assignments)
+      
+      if (this.continueSearching()) {
+	// find next solution by faking this solution didn't exist
+	return contradiction}
       else
 	return satisfied
     }
@@ -282,78 +305,28 @@ class sat {
 	if (res.length == 2)
 	  break}}
     return res}
+
+  continueSearching() {
+    return (
+      this.searchAllAssignments
+	&& (this.maxNumberAssignments === null
+	    || this.maxNumberAssignments > this.solutions.length))}
+  
+  recordAssignment(assignments) {
+    if (this.maxNumberAssignments === null
+	|| this.maxNumberAssignments > this.solutions.length)
+    {
+      this.solutions.push(assignments)}}
+
+}
+
+module.exports = {
+  sat: sat,
+  contradiction: contradiction,
+  satisfied: satisfied
 }
 
 // http://www.cs.utexas.edu/users/moore/acl2/seminar/2008.12.10-swords/sat.pdf
 // http://jsat.ewi.tudelft.nl/addendum/thesis_as_sent.pdf
 // http://www.cs.ubc.ca/~hoos/SATLIB/benchm.html
 
-function verboseTest(cnf, numTries, allowLearnClauses) {
-  numTries = numTries || 1;
-  var csc = []
-  let s = new sat(cnf)
-  s.allowLearnClauses = allowLearnClauses
-  var res = s.simplify();
-  if (res === contradiction) {
-    console.log('result, contradiction in simplification')
-    return}
-  for (var t = 0; t < numTries; t++) {
-    console.log('num clauses', s.dimacs.length)
-    var start = +new Date();
-    res = s.dpll();
-    var end = +new Date();
-    console.log('result:', res)
-    console.log('time', end-start)
-    console.log(s.stats)
-    csc.push(s.stats.numClauseSatisfiedChecks)
-    s.initializeStats()}
-  // csc.sort(compareInt)
-  return csc}
-
-function test1() {
-  let cnf = [[1,2,3], [-1,-2], [-2,-3], [3,4,5], [-4,5], [4, -5],
-	     [1,5,6], [-1,-5], [-5, -6], [2,-6], [-2,6],
-	     // [-2]
-	    ]
-  verboseTest(cnf)}
-
-function test2() {
-  let numVars = 50;
-  let numClauses3 = Math.floor(4.2 * numVars);
-  let numClauses2 = 0; // Math.floor(0.5 * numVars);
-  let numClauses1 = 0; // Math.floor(0.01 * numVars);
-  let cnf3 = randomCNF.randomCNF(3, numVars, numClauses3);
-  let cnf2 = randomCNF.randomCNF(2, numVars, numClauses2);
-  let cnf1 = randomCNF.randomCNF(1, numVars, numClauses1);
-  let cnf = [].concat(cnf1, cnf2, cnf3);
-  for (var clause of cnf)
-    console.log(clause)
-  verboseTest(cnf, 50)}
-
-function test3() {
-  let numVars = 70;
-  let numClauses3 = Math.floor(4.2 * numVars);
-  let numClauses2 = Math.floor(0 * numVars);
-  let numClauses1 = 0; // Math.floor(0.01 * numVars);
-  let cnf3 = randomCNF.randomCNF(3, numVars, numClauses3);
-  let cnf2 = randomCNF.randomCNF(2, numVars, numClauses2);
-  let cnf1 = randomCNF.randomCNF(1, numVars, numClauses1);
-  let cnf = [].concat(cnf1, cnf2, cnf3);
-  for (var clause of cnf)
-    console.log(clause)
-  let ra = verboseTest(cnf, 50, true)
-  let rb = verboseTest(cnf, 7, false)
-  console.log(ra);
-  console.log(rb)}
-
-function test4() {
-  dimacs.readDimacs(
-    process.argv[2],
-    function (cnf) {
-      for (var clause of cnf)
-	console.log(clause)
-      verboseTest(cnf)})}
-
-// test1();
-// test2();
-test3();

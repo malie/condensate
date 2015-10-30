@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "heap": "^0.2.6",
-    "immutable": "^3.7.5"
+    "immutable": "^3.7.5",
+    "underscore": "^1.8.3"
   }
 }
