@@ -2,8 +2,6 @@
 let assert = require('assert')
 let immutable = require('immutable')
 
-let dimacs = require('./dimacs')
-
 const contradiction = 'contradiction'
 const satisfied = 'satisfied'
 const assumption = 'assumption'
